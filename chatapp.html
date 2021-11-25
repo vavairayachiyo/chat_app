@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>chatApp</title>
+  <style>
+    #output li {
+      background: #ccc;
+    }
+  </style>
+  <!-- 翻訳機能実装 -->
+  <script type="text/javascript"
+    src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</head>
+
+<body>
+  <h1>リアルタイムチャット</h1>
+  <span>翻訳ボタン：国旗ボタンを押すと各語訳されます</span>
+  <div class="flags">
+    <img src="./img/jpflag.png" alt="JAPAN">→
+    <a href="#googtrans(ja|en)" class="lang-select" data-lang="en"><img src="./img/usflag.png" alt="USA"></a>
+    <a href="#googtrans(ja|vi)" class="lang-select" data-lang="vi"><img src="./img/vnflag.png" alt="Vietnam"></a>
+    <a href="#googtrans(ja|km)" class="lang-select" data-lang="km"><img src="./img/khflag.png" alt="Cambodia"></a>
+  </div>
+  <!-- 入力場所を作成しよう -->
+  <form>
+    <fieldset>
+      <legend>チャット入力画面</legend>
+      <div>
+        名前: <input type="text" id="name">
+      </div>
+      <div>
+        テキスト: <input type="text" id="text">
+      </div>
+      <div>
+        <button type="button" id="send">送る</button>
+      </div>
+    </fieldset>
+  </form>
+
+  <!-- データ出力場所 -->
+  <ul id="output"></ul>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+  <script>
+    //call Google translate api
+    function google_translate_api() {
+      var script = document.createElement("script");
+      script.type = "text/javascript";
+      script.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+      document.body.appendChild(script);
+    }
+  </script>
+  <script>
+//function googleTranslateElementInit() {
+//  new google.translate.TranslateElement({pageLanguage: 'ja'}, 'google_translate_element');
+//}
+  </script>
+  <script>
+    $('.lang-select').click(function () {
+      google_translate_api();
+    });
+  </script>
+
+  <script>
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'ja', includedLanguages: 'en,vi,km', autoDisplay: false,
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+      }, 'google_translate_element');
+    }
+  </script>
+
+  <script>
+    // 日時をいい感じの形式にする関数
+    function convertTimestampToDatetime(timestamp) {
+      const _d = timestamp ? new Date(timestamp * 1000) : new Date();
+      const Y = _d.getFullYear();
+      const m = (_d.getMonth() + 1).toString().padStart(2, '0');
+      const d = _d.getDate().toString().padStart(2, '0');
+      const H = _d.getHours().toString().padStart(2, '0');
+      const i = _d.getMinutes().toString().padStart(2, '0');
+      const s = _d.getSeconds().toString().padStart(2, '0');
+      return `${Y}/${m}/${d} ${H}:${i}:${s}`;
+    }
+  </script>
+  <!-- 以下にfirebaseのコードを貼り付けよう -->
+
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.5.0/firebase-app.js";
+    // TODO: Add SDKs for Firebase products that you want to use
+    // https://firebase.google.com/docs/web/setup#available-libraries
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      serverTimestamp,
+      query,
+      orderBy,
+      onSnapshot,
+    } from "https://www.gstatic.com/firebasejs/9.5.0/firebase-firestore.js";
+
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "",
+      authDomain: "app-chat-cb331.firebaseapp.com",
+      projectId: "app-chat-cb331",
+      storageBucket: "app-chat-cb331.appspot.com",
+      messagingSenderId: "904480605556",
+      appId: "1:904480605556:web:a673dba2543cb13ac0d821"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 送信ボタン送信時にデータ送信
+    $('#send').on('click', function () {
+      const data = {
+        name: $('#name').val(),
+        text: $('#text').val(),
+        time: serverTimestamp(),
+      };
+      addDoc(collection(db, 'chat'), data);
+      $('#text').val('');
+
+    });
+
+    // ENTERキーで送信
+    $("#text").on("keydown", function (e) {
+      if (e.keyCode === 13) {
+        const data = {
+          name: $("#name").val(),
+          text: $("#text").val(),
+          time: serverTimestamp(),
+        };
+        addDoc(collection(db, "chat"), data);
+        $("#text").val("");
+      }
+    });
+
+
+    // データ取得条件の指定（今回は時間の新しい順に並び替えて取得）
+    const q = query(collection(db, "chat"), orderBy("time", "desc"));
+
+    // データ取得処理
+    onSnapshot(q, (querySnapshot) => {
+      //onSnapshot(collection(db, 'chat'), (querySnapshot) => {
+      //console.log(querySnapshot.docs);
+      const dataArray = [];
+      querySnapshot.docs.forEach(function (doc) {
+        const data = {
+          id: doc.id,
+          data: doc.data(),
+        };
+        dataArray.push(data);
+      });
+
+      console.log(dataArray);
+
+      const tagArray = [];
+      dataArray.forEach(function (data) {
+        tagArray.push(`
+      <li id="${data.id}">
+        <p>${data.data.name} ${convertTimestampToDatetime(data.data.time.seconds)}</p>
+        <p>${data.data.text} </p>
+      </li>
+      `);
+      });
+
+      $("#output").html(tagArray);
+
+    });
+
+
+  </script>
+
+
+</body>
+
+</html>
